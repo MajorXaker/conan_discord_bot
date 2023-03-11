@@ -5,8 +5,8 @@ from discord.ext import tasks
 intents = discord.Intents.default()
 client = discord.Client(intents=intents)
 intents.message_content = True
-# BM_URL = "https://example.com" # <- в это значение нужно проставить адрес сервера на батлметрике
-BM_URL = "https://api.battlemetrics.com/servers/19247858"  # например так
+BM_URL = "https://example.com" # <- в это значение нужно проставить адрес сервера на батлметрике
+# BM_URL = "https://api.battlemetrics.com/servers/19247858"  # например так
 
 
 @client.event
