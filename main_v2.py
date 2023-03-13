@@ -1,11 +1,11 @@
 from typing import Any
 
 import discord
-from discord import TextChannel, Intents, Message, Guild, VoiceChannel
+from discord import TextChannel, Intents, Message, Guild, VoiceChannel, Permissions, Role
 from discord.ext import tasks
 
 from conf import settings as s
-from utils.guild_utils import try_channel, get_server_player_count
+from utils.guild_utils import try_channel, get_server_player_count, get_chanel_overwrites
 from utils.persistent_properties import PersistentProperties, GuildProperty
 from utils.setup_manager import SetupManager
 
@@ -51,11 +51,10 @@ class Client(discord.Client):
         if guild in self.guilds_properties_mapping:
             return
 
-        guild_service_channel = guild.system_channel  # hidden on noxs server
+        guild_service_channel = guild.system_channel
         guild_text_channels = [
             ch for ch in guild.channels if isinstance(ch, TextChannel)
         ]
-        # service_channel = list(guild.channels)[13]  # temporary hardcode
         guild_setup_channel = None
         if await try_channel(guild_service_channel):
             guild_setup_channel = guild_service_channel
@@ -83,7 +82,7 @@ class Client(discord.Client):
             role = await guild.create_role(name="CSM-Bot")
             props.role_id = role.id
             changed = True
-        return changed
+        return role, changed
 
     async def _create_channel_if_not_exists(
         self, guild: Guild, props: GuildProperty
@@ -115,16 +114,27 @@ class Client(discord.Client):
             changed = True
         return channel, changed
 
+    async def overwrite_roles_for_channel(self, channel: VoiceChannel, everyone_role: Role, bot_role: Role):
+        everyone_over, bot_over = get_chanel_overwrites()
+        await channel.set_permissions(everyone_role, overwrite=everyone_over, reason="Block access to stats channel")
+        await channel.set_permissions(bot_role, overwrite=bot_over, reason="Allow bot access to stats channel")
+
+
     @tasks.loop(seconds=s.BACKGROUND_CYCLE)
     async def background_loop(self):
         props_with_updates: list[GuildProperty] = []
         # TODO add context manager with properties to this loop
         for guild, props in self.guilds_properties_mapping.items():
             # await guild.me.edit(nick="BottyTheBot")
-            role_changed = await self._add_role_if_not_exist(guild, props)
+            bot_role, role_changed = await self._add_role_if_not_exist(guild, props)
             channel, channels_changed = await self._create_channel_if_not_exists(
                 guild, props
             )
+
+            everyone_role = discord.utils.find(lambda rl: rl.name == "everyone", guild.roles)
+            assert everyone_role is not None
+            await self.overwrite_roles_for_channel(channel, everyone_role, bot_role)
+
             if role_changed or channels_changed:
                 props_with_updates.append(props)
 
