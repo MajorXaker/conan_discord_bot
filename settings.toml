@@ -1,0 +1,9 @@
+[development]
+PROPERTIES_FILE="properties.json"
+GREETING_MESSAGE="Hi, folks!"
+BACKGROUND_CYCLE=5
+
+[production]
+PROPERTIES_FILE="properties.json"
+GREETING_MESSAGE="Hi, folks!"
+BACKGROUND_CYCLE=5
