@@ -2,8 +2,10 @@
 PROPERTIES_FILE="properties.json"
 GREETING_MESSAGE="Hi, folks!"
 BACKGROUND_CYCLE=5
+BM_API_BASE_URL="https://api.battlemetrics.com/servers"
 
 [production]
 PROPERTIES_FILE="properties.json"
 GREETING_MESSAGE="Hi, folks!"
 BACKGROUND_CYCLE=5
+BM_API_BASE_URL="https://api.battlemetrics.com/servers"

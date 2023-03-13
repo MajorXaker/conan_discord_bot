@@ -1,15 +1,12 @@
 from typing import Any
 
-from discord import TextChannel, Intents, Message, Guild
-from discord.ext import tasks
-from conf import settings as s
-
-# This example requires the 'message_content' intent.
-
 import discord
+from discord import TextChannel, Intents, Message, Guild, VoiceChannel
+from discord.ext import tasks
 
+from conf import settings as s
+from utils.guild_utils import try_channel, get_server_player_count
 from utils.persistent_properties import PersistentProperties, GuildProperty
-from utils.guild_utils import try_channel
 from utils.setup_manager import SetupManager
 
 intents = discord.Intents.default()
@@ -22,7 +19,7 @@ client = discord.Client(intents=intents)
 class Client(discord.Client):
     def __init__(self, *, intents: Intents, **options: Any):
         super().__init__(intents=intents, options=options)
-        self.guilds_in_setup: dict[Guild, GuildProperty] = {}
+        self.guilds_in_setup: dict[Guild, SetupManager] = {}
         self.guilds_properties_mapping: dict[Guild, GuildProperty] = {}
 
     async def on_ready(self):
@@ -88,7 +85,9 @@ class Client(discord.Client):
             changed = True
         return changed
 
-    async def _create_channel_if_not_exists(self, guild: Guild, props: GuildProperty):
+    async def _create_channel_if_not_exists(
+        self, guild: Guild, props: GuildProperty
+    ) -> tuple[VoiceChannel, bool]:
         changed = False
         cat = discord.utils.find(
             lambda cat: cat.id == props.channel_category_id, guild.categories
@@ -114,67 +113,31 @@ class Client(discord.Client):
             )
             props.channel_id = channel.id
             changed = True
-        return changed
+        return channel, changed
 
     @tasks.loop(seconds=s.BACKGROUND_CYCLE)
     async def background_loop(self):
         props_with_updates: list[GuildProperty] = []
         # TODO add context manager with properties to this loop
         for guild, props in self.guilds_properties_mapping.items():
+            # await guild.me.edit(nick="BottyTheBot")
             role_changed = await self._add_role_if_not_exist(guild, props)
-            channels_changed = await self._create_channel_if_not_exists(guild, props)
+            channel, channels_changed = await self._create_channel_if_not_exists(
+                guild, props
+            )
             if role_changed or channels_changed:
                 props_with_updates.append(props)
+
+            player_count = await get_server_player_count(props.server_id)
+            await channel.edit(
+                name=f"Players on server {player_count['players']}/{player_count['max_players']}",
+                reason="player_count update",
+            )
 
         if props_with_updates:
             pp = PersistentProperties()
             await pp.update_guilds(props_with_updates)
 
-    # async def get_tartar_pc(self) -> str:
-    #     async with httpx.AsyncClient() as client:
-    #         r = await client.get("https://api.battlemetrics.com/servers/19247858")
-    #         values = r.json()["data"]["attributes"]
-    #         return f"{values['players']}/{values['maxPlayers']}"
-
 
 client_instance = Client(intents=intents)
 client_instance.run(s.BOT_SECRET_KEY)
-
-# @client.event
-# async def on_ready():
-#     print(f"We have logged in as {client.user}")
-#     # task_loop.start()
-#
-#
-# @client.event
-# async def on_message(message):
-#     if message.author == client.user:
-#         return
-#     if re.findall(r"517417011727302658|Конец|конец", message.content):
-#         await message.channel.send("Конец тебе, конец!")
-#
-# @client.event
-# async def on_guild_join(guild):
-#     channel = guild.system_channel  # hidden on noxs server
-#     channel = list(guild.channels)[13]  # temporary hardcode
-#
-#
-# async def get_tartar_pc() -> str:
-#     async with httpx.AsyncClient() as client:
-#         r = await client.get("https://api.battlemetrics.com/servers/19247858")
-#         values = r.json()["data"]["attributes"]
-#         return f"{values['players']}/{values['maxPlayers']}"
-
-
-# @tasks.loop(seconds=10)
-# async def task_loop():
-#     pc_str = await get_tartar_pc()
-#     await client.change_presence(
-#         status=discord.Status.dnd,
-#         activity=discord.Activity(
-#             type=discord.ActivityType.watching, name=f"{pc_str} on Tartar"
-#         ),
-#     )
-#
-#
-# client.run(s.BOT_SECRET_KEY)
